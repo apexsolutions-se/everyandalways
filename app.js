@@ -149,7 +149,7 @@ async function initCamera() {
       els.video.onloadedmetadata = () => res();
     });
 
-    setStatus("Ready. Press “Start 3-Shot Session”.");
+    setStatus("Ready?. Smile.");
   } catch (err) {
     console.error(err);
     setStatus("Camera blocked. Please allow camera permission and reload.");
