@@ -423,7 +423,7 @@ function resetSession() {
   shots = [];
   clearThumbs();
   enableActions(false);
-  setStatus("Ready. Press “Start 3-Shot Session”.");
+  setStatus("Ready? Smile.");
 
   // ensure camera buttons show correctly
   els.btnRetake.disabled = true;
