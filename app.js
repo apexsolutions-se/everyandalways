@@ -34,15 +34,14 @@ let busy = false;
 /* =========
    CUSTOMIZE THESE (your bottom text)
    ========= */
-const STRIP_DATE = "21.04.2029";
-const STRIP_NAMES = "SHREK • FIONA";
+const STRIP_DATE = "17.02.2026";
+const STRIP_NAMES = "RENDS • LYKA";
 
 /* =========
    CUSTOMIZE INITIALS HERE
    ========= */
-const INITIAL_LEFT = "S";
-const INITIAL_RIGHT = "F";
-
+const INITIAL_LEFT = "R";
+const INITIAL_RIGHT = "L";
 
 /* =========
    UI helpers
@@ -52,10 +51,8 @@ function setStatus(msg) {
 }
 
 /**
- * IMPORTANT:
- * Your panels are absolute (inset:0), so their scrollHeight becomes
- * at least the stage height (circular measurement).
- * Solution: measure using an offscreen clone with position:static.
+ * Panels are absolute (inset:0) so we measure using an offscreen clone
+ * with position:static to get natural height.
  */
 function measurePanelNaturalHeight(panel) {
   if (!panel || !els.stage) return 720;
@@ -63,14 +60,10 @@ function measurePanelNaturalHeight(panel) {
   const stageRect = els.stage.getBoundingClientRect();
   const width = Math.max(320, Math.round(stageRect.width));
 
-  // Clone the panel
   const clone = panel.cloneNode(true);
-
-  // Remove IDs from the clone to avoid duplicates
   clone.removeAttribute("id");
   clone.querySelectorAll("[id]").forEach(n => n.removeAttribute("id"));
 
-  // Force clone to natural layout sizing
   clone.style.position = "static";
   clone.style.inset = "auto";
   clone.style.transform = "none";
@@ -80,7 +73,6 @@ function measurePanelNaturalHeight(panel) {
   clone.style.width = width + "px";
   clone.style.maxWidth = "none";
 
-  // Wrapper that is offscreen but measurable
   const wrap = document.createElement("div");
   wrap.style.position = "absolute";
   wrap.style.left = "-9999px";
@@ -92,13 +84,9 @@ function measurePanelNaturalHeight(panel) {
   wrap.appendChild(clone);
   document.body.appendChild(wrap);
 
-  // Measure
   const h = Math.ceil(clone.scrollHeight);
-
-  // Cleanup
   wrap.remove();
 
-  // Safety floor so it never collapses too small
   return Math.max(h, 520);
 }
 
@@ -106,7 +94,6 @@ let heightRaf = null;
 function setStageHeight() {
   if (!els.stage || !els.cameraPanel || !els.stripPanel) return;
 
-  // Debounce into next frame (prevents measuring mid-transition/layout)
   if (heightRaf) cancelAnimationFrame(heightRaf);
   heightRaf = requestAnimationFrame(() => {
     const inStrip = document.body.classList.contains("show-strip");
@@ -114,7 +101,6 @@ function setStageHeight() {
 
     const h = measurePanelNaturalHeight(target);
 
-    // Ensure we never keep an old minHeight around
     els.stage.style.minHeight = "0px";
     els.stage.style.height = h + "px";
   });
@@ -149,7 +135,7 @@ async function initCamera() {
       els.video.onloadedmetadata = () => res();
     });
 
-    setStatus("Ready?. Smile.");
+    setStatus("Ready? Smile.");
   } catch (err) {
     console.error(err);
     setStatus("Camera blocked. Please allow camera permission and reload.");
@@ -226,7 +212,7 @@ function setThumb(index, dataUrl) {
   const img = [els.thumb1, els.thumb2, els.thumb3][index];
   if (!img) return;
 
-  img.onload = () => setStageHeight(); // ✅ stage grows correctly when thumb appears
+  img.onload = () => setStageHeight();
   img.src = dataUrl;
 
   img.parentElement.classList.add("filled");
@@ -417,6 +403,7 @@ async function drawStripPhotoBW(ctx, dataUrl, x, y, w, h) {
 
 function enableActions(enabled) {
   els.btnPrint.disabled = !enabled;
+  els.btnRetake.disabled = !enabled;
 }
 
 function resetSession() {
@@ -425,8 +412,7 @@ function resetSession() {
   enableActions(false);
   setStatus("Ready? Smile.");
 
-  // ensure camera buttons show correctly
-  els.btnRetake.disabled = true;
+  // ensure start shows correctly
   els.btnStart.disabled = false;
 
   setStageHeight();
@@ -441,7 +427,6 @@ async function startSession() {
     resetSession();
 
     els.btnStart.disabled = true;
-    els.btnRetake.disabled = true;
     setStatus("Get ready… 3 photos coming up.");
 
     for (let i = 0; i < 3; i++) {
@@ -454,7 +439,6 @@ async function startSession() {
       shots.push(dataUrl);
       setThumb(i, dataUrl);
 
-      // give layout a moment to update, then measure
       await sleep(60);
       setStageHeight();
 
@@ -464,9 +448,8 @@ async function startSession() {
     setStatus("Building your strip…");
     await buildStrip();
 
-    setStatus("Your strip is ready. Press PRINT PHOTO.");
+    setStatus("Your strip is ready. Press PRINT PHOTO or Retake.");
     enableActions(true);
-    els.btnRetake.disabled = false;
 
     showStripView();
   } catch (err) {
@@ -491,7 +474,9 @@ function downloadStripPNG() {
 async function printLikeDownload() {
   if (els.btnPrint.disabled || busy) return;
 
+  busy = true;
   els.btnPrint.disabled = true;
+  els.btnRetake.disabled = true;
 
   await buildStrip();
 
@@ -506,18 +491,17 @@ async function printLikeDownload() {
     downloadStripPNG();
   }, downloadAtMs);
 
-setTimeout(() => {
-  els.stripShell.classList.remove("printing");
-  els.btnPrint.disabled = false;
+  setTimeout(() => {
+    els.stripShell.classList.remove("printing");
+    els.stripCanvas.style.transform = "translateY(0)";
 
-  // ✅ reset strip position for next run
-  els.stripCanvas.style.transform = "translateY(0)";
+    // after printing, reset and return to camera
+    resetSession();
+    showCameraView();
+    requestAnimationFrame(() => setStageHeight());
 
-  resetSession();
-  showCameraView();
-  requestAnimationFrame(() => setStageHeight());
-}, resetAtMs);
-
+    busy = false;
+  }, resetAtMs);
 }
 
 /* =========
@@ -528,10 +512,12 @@ els.btnStart.addEventListener("click", startSession);
 els.btnRetake.addEventListener("click", async () => {
   if (busy) return;
 
-  showCameraView();
+  // clean reset + return to camera (auto-switch remains for next run)
   resetSession();
+  showCameraView();
 
-  await buildStrip(); // keeps strip canvas ready (optional)
+  // keep strip canvas ready (optional)
+  await buildStrip();
   setStageHeight();
 });
 
