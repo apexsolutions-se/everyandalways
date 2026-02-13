@@ -30,6 +30,7 @@ body{
 ========================= */
 .gate{
   min-height: 100svh;
+  min-height: 100dvh;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -39,6 +40,7 @@ body{
   transition: opacity .3s ease, transform .3s ease;
   overflow: hidden;
 }
+
 .gate.is-hiding{
   opacity: 0;
   transform: translateY(6px);
@@ -432,4 +434,9 @@ video{
 
 @media (max-width: 600px){
   .logo{ max-width: 200px; }
+  .gate{ padding: 22px 16px; }
+  .logo-wrap{ margin-bottom: 18px; }
+  .divider{ margin: 0 auto 18px; }
+  .gate-foot{ margin-top: 14px; font-size: 11px; }
 }
+
