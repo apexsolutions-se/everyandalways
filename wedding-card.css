@@ -37,6 +37,7 @@ body{
   text-align:center;
   padding: 40px 20px;
   transition: opacity .3s ease, transform .3s ease;
+  overflow: hidden;
 }
 .gate.is-hiding{
   opacity: 0;
