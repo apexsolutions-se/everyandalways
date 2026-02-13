@@ -1,26 +1,49 @@
+<!-- index.html (complete) -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Vintage Online Photo Booth</title>
+  <title>Ever & Always — Photo Booth</title>
   <meta name="description" content="Take 3 photos and get a classic vintage photo strip." />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/favicon.png" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Special+Elite&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <div class="page">
+  <!-- GATE (your premium main page look) -->
+  <main class="gate" id="gate" aria-label="Enter Photo Booth">
+    <div class="gate-inner">
+      <div class="logo-wrap">
+        <img src="assets/mainlogo.png" alt="Ever & Always Logo" class="logo" />
+      </div>
+
+      <div class="divider" aria-hidden="true"></div>
+
+      <button class="cta" id="btn-enter" type="button" aria-label="Enter the Photo Booth">
+        Enter the Portrait Room
+      </button>
+
+      <div class="gate-note" id="gateNote" aria-live="polite"></div>
+    </div>
+
+    <div class="gate-foot">
+      <span>© 2026 Ever & Always</span>
+    </div>
+  </main>
+
+  <!-- BOOTH (hidden until they enter) -->
+  <div class="page" id="booth" aria-hidden="true">
     <header class="top">
       <div class="brand">
-        <div>
-          <div class="brand-logo">
-            <img src="assets/secondary.png" alt="Ever & Always Secondary Logo">
-          </div>
+        <div class="brand-logo">
+          <img src="assets/secondary.png" alt="Ever & Always Secondary Logo">
         </div>
       </div>
     </header>
@@ -31,7 +54,7 @@
       <section class="panel camera-panel" id="cameraPanel" aria-label="Camera">
         <div class="panel-head">
           <h2>The Portrait Room</h2>
-          <p>Allow camera access, then press <strong>Start</strong>.</p>
+          <p>Press <strong>Start</strong> when you’re ready.</p>
         </div>
 
         <div class="camera-wrap">
@@ -58,17 +81,17 @@
         </div>
 
         <div class="controls">
-          <button id="btn-start" class="btn primary">Start</button>
+          <button id="btn-start" class="btn primary" disabled>Start</button>
         </div>
 
         <div class="fineprint" id="status" aria-live="polite"></div>
       </section>
 
-      <!-- STRIP (hidden on load; revealed after 3 shots) -->
+      <!-- STRIP -->
       <section class="panel strip-panel" id="stripPanel" aria-label="Photo strip">
         <div class="panel-head">
           <h2>Your Strip is Ready</h2>
-          <p>Press <strong>PRINT PHOTO</strong> or <strong>RETAKE</strong></p>
+          <p><em>A memory for the album.</em></p>
         </div>
 
         <div class="strip-area">
@@ -79,6 +102,17 @@
           <div class="strip-actions">
             <button id="btn-print" class="btn primary" disabled>PRINT PHOTO</button>
             <button id="btn-retake" class="btn" disabled>Retake</button>
+          </div>
+
+          <!-- Share toast (copy only) -->
+          <div class="share-toast" id="shareToast" aria-live="polite">
+            <div class="share-text">
+              Your photo strip has been saved.<br>
+              Share it online with <strong>#EverAndAlways</strong>
+            </div>
+            <div class="share-actions">
+              <button class="btn mini" id="btn-copy-hashtag" type="button">Copy Hashtag</button>
+            </div>
           </div>
         </div>
       </section>
