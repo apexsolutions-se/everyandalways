@@ -1,0 +1,132 @@
+<!-- index.html (complete) -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ever & Always — Portrait Room</title>
+  <meta name="description" content="Take 3 photos and receive a wedding card keepsake." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/favicon.png" />
+
+  <!-- Fonts (canvas will use these too) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Great+Vibes&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <!-- GATE (premium landing) -->
+  <main class="gate" id="gate" aria-label="Enter Photo Booth">
+    <div class="gate-inner">
+      <div class="logo-wrap">
+        <img src="assets/mainlogo.png" alt="Ever & Always Logo" class="logo" />
+      </div>
+
+      <div class="divider" aria-hidden="true"></div>
+
+      <button class="cta" id="btn-enter" type="button" aria-label="Enter the Photo Booth">
+        Enter the Portrait Room
+      </button>
+
+      <div class="gate-note" id="gateNote" aria-live="polite"></div>
+    </div>
+
+    <div class="gate-foot">
+      <span>© 2026 Ever & Always</span>
+    </div>
+  </main>
+
+  <!-- BOOTH (hidden until they enter) -->
+  <div class="page" id="booth" aria-hidden="true">
+    <header class="top">
+      <div class="brand">
+        <div class="brand-logo">
+          <img src="assets/secondary.png" alt="Ever & Always Secondary Logo">
+        </div>
+      </div>
+    </header>
+
+    <main class="stage" id="stage" aria-label="Photo booth stage">
+      <!-- CAMERA -->
+      <section class="panel camera-panel" id="cameraPanel" aria-label="Camera">
+        <div class="panel-head">
+          <h2>The Portrait Room</h2>
+          <p>Press <strong>Start</strong> when you’re ready.</p>
+        </div>
+
+        <div class="camera-wrap">
+          <div class="frame">
+            <video id="video" playsinline autoplay muted></video>
+            <div id="flash" class="flash" aria-hidden="true"></div>
+            <div id="countdown" class="countdown" aria-live="polite"></div>
+          </div>
+
+          <div class="shot-row" aria-label="Captured shots">
+            <div class="shot">
+              <div class="shot-label">1</div>
+              <img id="thumb1" alt="Shot 1 preview" />
+            </div>
+            <div class="shot">
+              <div class="shot-label">2</div>
+              <img id="thumb2" alt="Shot 2 preview" />
+            </div>
+            <div class="shot">
+              <div class="shot-label">3</div>
+              <img id="thumb3" alt="Shot 3 preview" />
+            </div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="btn-start" class="btn primary" disabled>Start</button>
+        </div>
+
+        <div class="fineprint" id="status" aria-live="polite"></div>
+      </section>
+
+      <!-- CARD -->
+      <section class="panel strip-panel" id="stripPanel" aria-label="Wedding card">
+        <div class="panel-head">
+          <h2>Your Keepsake is Ready</h2>
+          <p><em>A memory for the album.</em></p>
+        </div>
+
+        <div class="strip-area">
+          <div class="strip-shell" id="stripShell">
+            <!-- Card canvas (2×2 layout) -->
+            <canvas id="stripCanvas" width="1600" height="1100" aria-label="Wedding card canvas"></canvas>
+          </div>
+
+          <div class="strip-actions">
+            <button id="btn-print" class="btn primary" disabled>DOWNLOAD</button>
+            <button id="btn-retake" class="btn" disabled>Retake</button>
+          </div>
+
+          <!-- Share toast (copy only) -->
+          <div class="share-toast" id="shareToast" aria-live="polite">
+            <div class="share-text">
+              Your photo card has been saved.<br>
+              Share it online with <strong>#EverAndAlways</strong>
+            </div>
+            <div class="share-actions">
+              <button class="btn mini" id="btn-copy-hashtag" type="button">Copy Hashtag</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>© 2026 Ever & Always</span>
+    </footer>
+  </div>
+
+  <!-- hidden capture canvas -->
+  <canvas id="captureCanvas" width="1280" height="720" class="hidden"></canvas>
+
+  <script src="app.js"></script>
+</body>
+</html>
