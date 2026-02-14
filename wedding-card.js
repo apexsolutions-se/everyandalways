@@ -7,6 +7,7 @@
        Row 1: Photo 1 | Photo 2
        Row 2: Photo 3 | TEXT PNG (transparent)
    - DOWNLOAD = optional animation + download (no print dialog)
+   - ✅ iPhone: long-press saves to Photos via invisible IMG overlay (same page)
 */
 
 const els = {
@@ -39,22 +40,24 @@ const els = {
   stage: document.getElementById("stage"),
   cameraPanel: document.getElementById("cameraPanel"),
   stripPanel: document.getElementById("stripPanel"),
+
+  // ✅ overlay image
+  holdToSave: document.getElementById("holdToSave"),
 };
 
 let stream = null;
 let busy = false;
 
-// store BOTH data urls + decoded images (so redraw never “pops”)
-let shotData = [];     // ["data:image/jpeg...", ...]
-let shotImgs = [];     // [HTMLImageElement, ...] decoded
+let shotData = [];
+let shotImgs = [];
 
 /* =========
    CUSTOMIZE
    ========= */
 const SHARE_HASHTAG = "#EverAndAlways";
 
-const TEXT_PNG_SRC = "assets/wedding-text.png"; // transparent PNG you made
-const TEXT_PNG_FIT = "contain"; // "contain" or "cover"
+const TEXT_PNG_SRC = "assets/wedding-text.png";
+const TEXT_PNG_FIT = "contain";
 
 const CARD_PAD = 28;
 const CARD_GAP = 16;
@@ -163,12 +166,7 @@ function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = async () => {
-      try {
-        // decode() prevents half-painted frames in some browsers
-        if (img.decode) await img.decode();
-      } catch {
-        // decode can fail sometimes; ignore
-      }
+      try { if (img.decode) await img.decode(); } catch {}
       resolve(img);
     };
     img.onerror = reject;
@@ -190,6 +188,20 @@ function ensureTextOverlay() {
     });
 
   return textOverlayReady;
+}
+
+/* =========
+   ✅ Hold-to-save overlay sync (ONLY after card draw)
+   ========= */
+function syncHoldToSaveOverlay() {
+  if (!els.holdToSave || !els.stripCanvas) return;
+  try {
+    if (!els.stripCanvas.width || !els.stripCanvas.height) return;
+    const pngUrl = els.stripCanvas.toDataURL("image/png");
+    els.holdToSave.src = pngUrl;
+  } catch {
+    // ignore
+  }
 }
 
 /* =========
@@ -269,7 +281,6 @@ function captureFrame() {
   c.width = vw;
   c.height = vh;
 
-  // draw mirrored
   ctx.save();
   ctx.translate(vw, 0);
   ctx.scale(-1, 1);
@@ -280,7 +291,6 @@ function captureFrame() {
   toGrayscaleInPlace(imgData);
   ctx.putImageData(imgData, 0, 0);
 
-  // vignette
   const g = ctx.createRadialGradient(
     vw / 2, vh / 2, Math.min(vw, vh) * 0.18,
     vw / 2, vh / 2, Math.max(vw, vh) * 0.68
@@ -342,7 +352,7 @@ function containRect(srcW, srcH, dstW, dstH) {
     dx = 0;
     dy = Math.round((dstH - dh) / 2);
   } else {
-    dh = dstH;
+    dh = dstW ? dstH : dstH;
     dw = Math.round(dstH * srcRatio);
     dy = 0;
     dx = Math.round((dstW - dw) / 2);
@@ -397,7 +407,6 @@ function drawTextOverlay(ctx, x, y, w, h) {
 }
 
 async function buildCard() {
-  // ✅ Make sure the overlay PNG is READY before drawing (fixes bottom-right “glitch”)
   await ensureTextOverlay();
 
   const canvas = els.stripCanvas;
@@ -430,6 +439,9 @@ async function buildCard() {
   await drawPhotoFillBW(ctx, shotImgs[2], x1, y2, cellW, cellH);
 
   drawTextOverlay(ctx, x2, y2, cellW, cellH);
+
+  // ✅ sync overlay after the draw is actually on the canvas
+  requestAnimationFrame(syncHoldToSaveOverlay);
 }
 
 /* =========
@@ -472,7 +484,6 @@ async function startSession() {
       shotData[i] = dataUrl;
       setThumb(i, dataUrl);
 
-      // ✅ decode now (so later redraw/download is instant & stable)
       shotImgs[i] = await loadImage(dataUrl);
 
       await sleep(120);
@@ -498,7 +509,7 @@ async function startSession() {
 }
 
 /* =========
-   Download (keeps your “printing” class animation)
+   Download
    ========= */
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -508,7 +519,6 @@ function downloadBlob(blob, filename) {
   a.style.display = "none";
   document.body.appendChild(a);
 
-  // reduce scroll/focus jump
   const sx = window.scrollX, sy = window.scrollY;
   a.click();
   window.scrollTo(sx, sy);
@@ -525,15 +535,12 @@ async function downloadWithAnimation() {
   els.btnRetake.disabled = true;
 
   try {
-    // ✅ DO NOT rebuild while animating; just ensure canvas is correct once
     await buildCard();
 
-    // trigger your CSS animation (whatever it is)
     els.stripShell.classList.remove("printing");
     void els.stripShell.offsetWidth;
     els.stripShell.classList.add("printing");
 
-    // download after a short delay (so the animation “starts” visually)
     setTimeout(() => {
       els.stripCanvas.toBlob((blob) => {
         if (blob) downloadBlob(blob, "wedding-photo-card.png");
@@ -574,7 +581,6 @@ els.btnEnter.addEventListener("click", async () => {
     els.gate.classList.add("is-hiding");
     await sleep(300);
 
-    // ✅ start loading overlay immediately
     ensureTextOverlay();
 
     const ok = await initCamera();
@@ -589,7 +595,6 @@ els.btnEnter.addEventListener("click", async () => {
     showCameraView();
     resetSession();
 
-    // build a clean blank card preview
     await buildCard();
     setStageHeight();
   } finally {
@@ -623,9 +628,7 @@ els.btnCopyHashtag?.addEventListener("click", async () => {
     const prev = els.btnCopyHashtag.textContent;
     els.btnCopyHashtag.textContent = "Copied";
     setTimeout(() => (els.btnCopyHashtag.textContent = prev), 900);
-  } catch {
-    // ok
-  }
+  } catch {}
 });
 
 window.addEventListener("resize", () => setStageHeight());
