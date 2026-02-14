@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Great+Vibes&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="wedding-card.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
@@ -96,8 +96,13 @@
 
         <div class="strip-area">
           <div class="strip-shell" id="stripShell">
-            <!-- Card canvas (2×2 layout) -->
-            <canvas id="stripCanvas" width="1600" height="1100" aria-label="Wedding card canvas"></canvas>
+            <!-- ✅ wrapper so overlay can’t interfere with stage switching/measurement -->
+            <div class="card-wrap" id="cardWrap">
+              <canvas id="stripCanvas" width="1600" height="1100" aria-label="Wedding card canvas"></canvas>
+
+              <!-- ✅ iPhone long-press target (overlay image, same-page, no new tab) -->
+              <img id="holdToSave" class="hold-save" alt="Wedding photo card (hold to save)" draggable="false" />
+            </div>
           </div>
 
           <div class="strip-actions">
@@ -109,7 +114,7 @@
           <div class="share-toast" id="shareToast" aria-live="polite">
             <div class="share-text">
               Your photo card has been saved.<br>
-              Share it online with <strong>#EverAndAlwaysStudio</strong>
+              Share it online with <strong>#EverAndAlways</strong>
             </div>
             <div class="share-actions">
               <button class="btn mini" id="btn-copy-hashtag" type="button">Copy Hashtag</button>
@@ -127,6 +132,6 @@
   <!-- hidden capture canvas -->
   <canvas id="captureCanvas" width="1280" height="720" class="hidden"></canvas>
 
-  <script src="wedding-card.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
