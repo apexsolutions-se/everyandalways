@@ -29,7 +29,6 @@ body{
    GATE (premium landing)
 ========================= */
 .gate{
-  /* ✅ force exact viewport height on mobile browsers */
   height: 100svh;
   height: 100dvh;
   min-height: 0;
@@ -40,7 +39,6 @@ body{
   justify-content:center;
   text-align:center;
 
-  /* ✅ prevent padding from pushing past viewport */
   padding: clamp(18px, 4vh, 40px) 20px;
 
   transition: opacity .3s ease, transform .3s ease;
@@ -359,7 +357,14 @@ video{
   height: auto;
   overflow: visible;
 }
-.strip-shell canvas{
+
+/* ✅ wrapper controls overlay safely */
+.card-wrap{
+  position: relative;
+  width: 100%;
+}
+
+.card-wrap canvas{
   width: 100%;
   height: auto;
   display: block;
@@ -376,6 +381,31 @@ video{
 .strip-shell.printing #stripCanvas{
   animation: none;
 }
+
+/* ✅ hold-to-save overlay: default OFF everywhere (so it can’t break desktop) */
+.hold-save{
+  display: none;
+}
+
+/* ✅ iOS only: enable invisible image overlay for long-press Save Image */
+@supports (-webkit-touch-callout: default) {
+  .hold-save{
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    object-fit: contain;
+
+    opacity: 0.001;            /* invisible but “touchable” */
+    pointer-events: auto;      /* must receive long-press */
+    -webkit-touch-callout: default;
+    user-select: none;
+    z-index: 2;
+  }
+}
+
 .strip-actions{
   display:flex;
   justify-content:center;
