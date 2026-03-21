@@ -1,8 +1,12 @@
 // app.js (complete)
-/* Vintage Photo Booth
+/* Ever & Always — Wedding Card Photo Booth
+   - Gate landing → booth
    - 3 photos with countdown
-   - GUARANTEED black & white (pixel-level grayscale)
-   - PRINT PHOTO = animation + download (no print dialog)
+   - Output: 2x2 wedding card
+       Row 1: Photo 1 | Photo 2
+       Row 2: Photo 3 | TEXT PNG (transparent)
+   - DOWNLOAD = optional animation + download (no print dialog)
+   - ✅ iPhone: long-press saves to Photos via invisible IMG overlay (same page)
 */
 
 const els = {
@@ -35,28 +39,32 @@ const els = {
   stage: document.getElementById("stage"),
   cameraPanel: document.getElementById("cameraPanel"),
   stripPanel: document.getElementById("stripPanel"),
+
+  // overlay image
+  holdToSave: document.getElementById("holdToSave"),
 };
 
 let stream = null;
-let shots = [];
 let busy = false;
 
-/* =========
-   CUSTOMIZE THESE (your bottom text)
-   ========= */
-const STRIP_DATE = "19.12.2029";
-const STRIP_NAMES = "SHREK • FIONA";
+let shotData = [];
+let shotImgs = [];
 
 /* =========
-   CUSTOMIZE INITIALS HERE
-   ========= */
-const INITIAL_LEFT = "S";
-const INITIAL_RIGHT = "F";
-
-/* =========
-   SHARE SETTINGS
+   CUSTOMIZE
    ========= */
 const SHARE_HASHTAG = "#EverAndAlways";
+
+const TEXT_PNG_SRC = "assets/wedding-text.png";
+const TEXT_PNG_FIT = "contain";
+
+const CARD_PAD = 28;
+const CARD_GAP = 16;
+const CELL_INSET = 0;
+
+// text overlay cached + decoded
+let textOverlayImg = null;
+let textOverlayReady = null;
 
 /* =========
    UI helpers
@@ -67,7 +75,6 @@ function setStatus(msg) {
 function setGateNote(msg) {
   if (els.gateNote) els.gateNote.textContent = msg || "";
 }
-
 function showToast() {
   if (!els.shareToast) return;
   els.shareToast.classList.add("show");
@@ -76,9 +83,8 @@ function hideToast() {
   if (!els.shareToast) return;
   els.shareToast.classList.remove("show");
 }
-
 function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function fadeStage(ms = 300) {
@@ -88,10 +94,9 @@ async function fadeStage(ms = 300) {
   els.stage.classList.remove("fading");
 }
 
-/**
- * Panels are absolute (inset:0) so we measure using an offscreen clone
- * with position:static to get natural height.
- */
+/* =========
+   Stage height helper
+   ========= */
 function measurePanelNaturalHeight(panel) {
   if (!panel || !els.stage) return 720;
 
@@ -100,7 +105,7 @@ function measurePanelNaturalHeight(panel) {
 
   const clone = panel.cloneNode(true);
   clone.removeAttribute("id");
-  clone.querySelectorAll("[id]").forEach(n => n.removeAttribute("id"));
+  clone.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
 
   clone.style.position = "static";
   clone.style.inset = "auto";
@@ -154,7 +159,54 @@ function showStripView() {
 }
 
 /* =========
-   Camera init (only after entering)
+   Image loading (decode to avoid “glitch”)
+   ========= */
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = async () => {
+      try {
+        if (img.decode) await img.decode();
+      } catch {}
+      resolve(img);
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function ensureTextOverlay() {
+  if (textOverlayReady) return textOverlayReady;
+
+  textOverlayReady = loadImage(TEXT_PNG_SRC)
+    .then((img) => {
+      textOverlayImg = img;
+      return img;
+    })
+    .catch(() => {
+      textOverlayImg = null;
+      return null;
+    });
+
+  return textOverlayReady;
+}
+
+/* =========
+   Hold-to-save overlay sync
+   ========= */
+function syncHoldToSaveOverlay() {
+  if (!els.holdToSave || !els.stripCanvas) return;
+  try {
+    if (!els.stripCanvas.width || !els.stripCanvas.height) return;
+    const pngUrl = els.stripCanvas.toDataURL("image/png");
+    els.holdToSave.src = pngUrl;
+  } catch {
+    // ignore
+  }
+}
+
+/* =========
+   Camera init
    ========= */
 async function initCamera() {
   try {
@@ -162,13 +214,17 @@ async function initCamera() {
     setStatus("Requesting camera access…");
 
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
       audio: false,
     });
 
     els.video.srcObject = stream;
 
-    await new Promise(res => {
+    await new Promise((res) => {
       els.video.onloadedmetadata = () => res();
     });
 
@@ -187,19 +243,16 @@ async function initCamera() {
 }
 
 /* =========
-   Countdown
+   Countdown + flash
    ========= */
 async function countdown(seconds = 3) {
   els.countdown.classList.add("show");
-
   for (let i = seconds; i >= 1; i--) {
     els.countdown.textContent = String(i);
     await sleep(750);
   }
-
   els.countdown.textContent = "Smile…";
   await sleep(520);
-
   els.countdown.classList.remove("show");
   els.countdown.textContent = "";
 }
@@ -211,19 +264,8 @@ function flash() {
 }
 
 /* =========
-   GUARANTEED GRAYSCALE (pixel conversion)
+   Capture frame in COLOR
    ========= */
-function toGrayscaleInPlace(imageData) {
-  const d = imageData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i], g = d[i + 1], b = d[i + 2];
-    const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
-    d[i] = d[i + 1] = d[i + 2] = y;
-  }
-  return imageData;
-}
-
-/* Capture 1 frame -> BW JPEG dataURL */
 function captureFrame() {
   const c = els.captureCanvas;
   const ctx = c.getContext("2d", { willReadFrequently: true });
@@ -233,22 +275,19 @@ function captureFrame() {
   c.width = vw;
   c.height = vh;
 
-  // draw mirrored
   ctx.save();
   ctx.translate(vw, 0);
   ctx.scale(-1, 1);
   ctx.drawImage(els.video, 0, 0, vw, vh);
   ctx.restore();
 
-  // convert to grayscale (guaranteed)
-  const imgData = ctx.getImageData(0, 0, vw, vh);
-  toGrayscaleInPlace(imgData);
-  ctx.putImageData(imgData, 0, 0);
-
-  // subtle vignette
   const g = ctx.createRadialGradient(
-    vw / 2, vh / 2, Math.min(vw, vh) * 0.18,
-    vw / 2, vh / 2, Math.max(vw, vh) * 0.68
+    vw / 2,
+    vh / 2,
+    Math.min(vw, vh) * 0.18,
+    vw / 2,
+    vh / 2,
+    Math.max(vw, vh) * 0.68
   );
   g.addColorStop(0, "rgba(0,0,0,0)");
   g.addColorStop(1, "rgba(0,0,0,0.28)");
@@ -261,127 +300,21 @@ function captureFrame() {
 function setThumb(index, dataUrl) {
   const img = [els.thumb1, els.thumb2, els.thumb3][index];
   if (!img) return;
-
   img.onload = () => setStageHeight();
   img.src = dataUrl;
-
   img.parentElement.classList.add("filled");
 }
 
 function clearThumbs() {
-  [els.thumb1, els.thumb2, els.thumb3].forEach(img => {
+  [els.thumb1, els.thumb2, els.thumb3].forEach((img) => {
     img.removeAttribute("src");
     img.parentElement.classList.remove("filled");
   });
 }
 
 /* =========
-   STRIP BUILD
+   Card drawing helpers
    ========= */
-async function buildStrip() {
-  const canvas = els.stripCanvas;
-  const ctx = canvas.getContext("2d");
-
-  const W = canvas.width;   // 600
-  const H = canvas.height;  // 1800
-
-  const pad = 28;
-  const gap = 12;
-  const topPadExtra = 30;
-  const bottomArea = 320;
-
-  const photoW = W - pad * 2;
-  const photoH = Math.floor((H - pad * 2 - topPadExtra - bottomArea - gap * 2) / 3);
-
-  ctx.clearRect(0, 0, W, H);
-
-  // strip background
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, W, H);
-
-  // tiny paper tint
-  const paper = ctx.createLinearGradient(0, 0, W, H);
-  paper.addColorStop(0, "rgba(0,0,0,0.025)");
-  paper.addColorStop(1, "rgba(0,0,0,0.01)");
-  ctx.fillStyle = paper;
-  ctx.fillRect(0, 0, W, H);
-
-  // photos
-  for (let i = 0; i < 3; i++) {
-    const y = pad + topPadExtra + i * (photoH + gap);
-    if (shots[i]) {
-      await drawStripPhotoBW(ctx, shots[i], pad, y, photoW, photoH);
-    } else {
-      ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.03)";
-      roundRect(ctx, pad, y, photoW, photoH, 12);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  // bottom text positions
-  const initialsY = H - pad - 110;
-  const dateY = initialsY - 145;
-  const namesY = H - pad - 34;
-
-  ctx.textAlign = "center";
-
-  // DATE
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.font = "22px 'Times New Roman', Times, serif";
-  ctx.fillText(STRIP_DATE, W / 2, dateY);
-
-  // INITIALS
-  const centerX = W / 2;
-  const letterSize = 120;
-  const letterSpacing = 70;
-  const liftAmount = 20;
-
-  ctx.fillStyle = "rgba(0,0,0,0.88)";
-  ctx.font = `${letterSize}px 'Times New Roman', Times, serif`;
-
-  ctx.fillText(INITIAL_LEFT, centerX - letterSpacing, initialsY - liftAmount);
-  ctx.fillText(INITIAL_RIGHT, centerX + letterSpacing, initialsY + 10);
-
-  // diagonal line
-  ctx.strokeStyle = "rgba(0,0,0,0.75)";
-  ctx.lineWidth = 2;
-
-  const lineHeight = 120;
-  const lineTilt = 35;
-  const lineCenterY = initialsY - 40;
-
-  ctx.beginPath();
-  ctx.moveTo(centerX + lineTilt, lineCenterY - lineHeight / 2);
-  ctx.lineTo(centerX - lineTilt, lineCenterY + lineHeight / 2);
-  ctx.stroke();
-
-  // NAMES
-  ctx.fillStyle = "rgba(0,0,0,0.60)";
-  ctx.font = "25px 'Times New Roman', Times, serif";
-  ctx.fillText(STRIP_NAMES, W / 2, namesY);
-
-  // line under names
-  ctx.strokeStyle = "rgba(0,0,0,0.18)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(W / 2 - 180, namesY + 22);
-  ctx.lineTo(W / 2 + 180, namesY + 22);
-  ctx.stroke();
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
 function coverRect(srcW, srcH, dstW, dstH) {
   const srcRatio = srcW / srcH;
   const dstRatio = dstW / dstH;
@@ -401,58 +334,109 @@ function coverRect(srcW, srcH, dstW, dstH) {
   return { sx, sy, sw, sh };
 }
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+function containRect(srcW, srcH, dstW, dstH) {
+  const srcRatio = srcW / srcH;
+  const dstRatio = dstW / dstH;
+
+  let dw, dh, dx, dy;
+
+  if (srcRatio > dstRatio) {
+    dw = dstW;
+    dh = Math.round(dstW / srcRatio);
+    dx = 0;
+    dy = Math.round((dstH - dh) / 2);
+  } else {
+    dh = dstH;
+    dw = Math.round(dstH * srcRatio);
+    dy = 0;
+    dx = Math.round((dstW - dw) / 2);
+  }
+  return { dx, dy, dw, dh };
 }
 
-async function drawStripPhotoBW(ctx, dataUrl, x, y, w, h) {
+async function drawPhotoFill(ctx, imgObj, x, y, w, h) {
+  if (!imgObj) return;
+
+  const { sx, sy, sw, sh } = coverRect(imgObj.width, imgObj.height, w, h);
+  ctx.drawImage(imgObj, sx, sy, sw, sh, x, y, w, h);
+}
+
+function drawTextOverlay(ctx, x, y, w, h) {
   ctx.save();
   ctx.fillStyle = "#ffffff";
-  roundRect(ctx, x, y, w, h, 10);
-  ctx.fill();
+  ctx.fillRect(x, y, w, h);
 
-  const inset = 8;
-  const ix = x + inset;
-  const iy = y + inset;
-  const iw = w - inset * 2;
-  const ih = h - inset * 2;
+  if (!textOverlayImg) {
+    ctx.restore();
+    return;
+  }
 
-  const img = await loadImage(dataUrl);
-  const { sx, sy, sw, sh } = coverRect(img.width, img.height, iw, ih);
+  const inset = Math.max(0, CELL_INSET | 0);
+  const tx = x + inset;
+  const ty = y + inset;
+  const tw = w - inset * 2;
+  const th = h - inset * 2;
 
-  const tmp = document.createElement("canvas");
-  tmp.width = iw;
-  tmp.height = ih;
-  const tctx = tmp.getContext("2d", { willReadFrequently: true });
-
-  tctx.drawImage(img, sx, sy, sw, sh, 0, 0, iw, ih);
-
-  const imgData = tctx.getImageData(0, 0, iw, ih);
-  toGrayscaleInPlace(imgData);
-  tctx.putImageData(imgData, 0, 0);
-
-  ctx.shadowColor = "rgba(0,0,0,0.18)";
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetY = 8;
-
-  ctx.drawImage(tmp, ix, iy);
-
-  ctx.shadowColor = "transparent";
-
-  ctx.strokeStyle = "rgba(0,0,0,0.12)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(ix + 1, iy + 1, iw - 2, ih - 2);
+  if (TEXT_PNG_FIT === "cover") {
+    const { sx, sy, sw, sh } = coverRect(
+      textOverlayImg.width,
+      textOverlayImg.height,
+      tw,
+      th
+    );
+    ctx.drawImage(textOverlayImg, sx, sy, sw, sh, tx, ty, tw, th);
+  } else {
+    const { dx, dy, dw, dh } = containRect(
+      textOverlayImg.width,
+      textOverlayImg.height,
+      tw,
+      th
+    );
+    ctx.drawImage(textOverlayImg, tx + dx, ty + dy, dw, dh);
+  }
 
   ctx.restore();
 }
 
+async function buildCard() {
+  await ensureTextOverlay();
+
+  const canvas = els.stripCanvas;
+  const ctx = canvas.getContext("2d");
+
+  const W = canvas.width;
+  const H = canvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+
+  const pad = CARD_PAD;
+  const gap = CARD_GAP;
+
+  const innerW = W - pad * 2;
+  const innerH = H - pad * 2;
+
+  const cellW = Math.floor((innerW - gap) / 2);
+  const cellH = Math.floor((innerH - gap) / 2);
+
+  const x1 = pad;
+  const x2 = pad + cellW + gap;
+  const y1 = pad;
+  const y2 = pad + cellH + gap;
+
+  await drawPhotoFill(ctx, shotImgs[0], x1, y1, cellW, cellH);
+  await drawPhotoFill(ctx, shotImgs[1], x2, y1, cellW, cellH);
+  await drawPhotoFill(ctx, shotImgs[2], x1, y2, cellW, cellH);
+
+  drawTextOverlay(ctx, x2, y2, cellW, cellH);
+
+  requestAnimationFrame(syncHoldToSaveOverlay);
+}
+
 /* =========
-   Flow controls
+   Flow
    ========= */
 function enableActions(enabled) {
   els.btnPrint.disabled = !enabled;
@@ -460,7 +444,8 @@ function enableActions(enabled) {
 }
 
 function resetSession() {
-  shots = [];
+  shotData = [];
+  shotImgs = [];
   clearThumbs();
   enableActions(false);
   hideToast();
@@ -487,23 +472,23 @@ async function startSession() {
       await sleep(120);
 
       const dataUrl = captureFrame();
-      shots.push(dataUrl);
+      shotData[i] = dataUrl;
       setThumb(i, dataUrl);
 
-      await sleep(60);
+      shotImgs[i] = await loadImage(dataUrl);
+
+      await sleep(120);
       setStageHeight();
-      await sleep(420);
     }
 
     setStatus("Developing your film…");
-    await sleep(850);
+    await sleep(650);
 
-    setStatus("Building your strip…");
-    await buildStrip();
+    setStatus("Building your card…");
+    await buildCard();
 
     setStatus("");
     enableActions(true);
-
     showStripView();
   } catch (err) {
     console.error(err);
@@ -514,48 +499,61 @@ async function startSession() {
   }
 }
 
-function downloadStripPNG() {
-  const url = els.stripCanvas.toDataURL("image/png");
+/* =========
+   Download
+   ========= */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "photo-strip.png";
+  a.download = filename;
+  a.style.display = "none";
   document.body.appendChild(a);
+
+  const sx = window.scrollX,
+    sy = window.scrollY;
   a.click();
+  window.scrollTo(sx, sy);
+
   a.remove();
+  URL.revokeObjectURL(url);
 }
 
-async function printLikeDownload() {
+async function downloadWithAnimation() {
   if (els.btnPrint.disabled || busy) return;
 
   busy = true;
   els.btnPrint.disabled = true;
   els.btnRetake.disabled = true;
 
-  await buildStrip();
+  try {
+    await buildCard();
 
-  els.stripShell.classList.remove("printing");
-  void els.stripShell.offsetWidth;
-  els.stripShell.classList.add("printing");
-
-  const downloadAtMs = 1750;
-  const endAtMs = 2300;
-
-  setTimeout(() => {
-    downloadStripPNG();
-  }, downloadAtMs);
-
-  setTimeout(() => {
     els.stripShell.classList.remove("printing");
-    els.stripCanvas.style.transform = "translateY(0)";
+    void els.stripShell.offsetWidth;
+    els.stripShell.classList.add("printing");
 
-    showToast();
+    setTimeout(() => {
+      els.stripCanvas.toBlob((blob) => {
+        if (blob) downloadBlob(blob, "wedding-photo-card.png");
+      }, "image/png");
+    }, 350);
 
+    setTimeout(() => {
+      els.stripShell.classList.remove("printing");
+      showToast();
+      els.btnPrint.disabled = false;
+      els.btnRetake.disabled = false;
+      busy = false;
+      setStageHeight();
+    }, 900);
+  } catch (e) {
+    console.error(e);
+    setStatus("Download failed. Please try again.");
     els.btnPrint.disabled = false;
     els.btnRetake.disabled = false;
     busy = false;
-
-    setStageHeight();
-  }, endAtMs);
+  }
 }
 
 /* =========
@@ -566,33 +564,30 @@ els.btnEnter.addEventListener("click", async () => {
   busy = true;
 
   try {
-    // turn on booth UI, fade the gate away
     els.btnEnter.disabled = true;
     setGateNote("Requesting camera access…");
 
-    // show booth container
     document.body.classList.add("booth-on");
     els.booth.setAttribute("aria-hidden", "false");
 
-    // fade gate out
     els.gate.classList.add("is-hiding");
     await sleep(300);
 
-    // init camera
+    ensureTextOverlay();
+
     const ok = await initCamera();
     if (!ok) {
       els.btnEnter.disabled = false;
-      busy = false;
       return;
     }
 
-    // hide gate from layout entirely after success
     els.gate.style.display = "none";
     setGateNote("");
 
     showCameraView();
     resetSession();
-    await buildStrip(); // keep strip canvas ready
+
+    await buildCard();
     setStageHeight();
   } finally {
     busy = false;
@@ -617,7 +612,7 @@ els.btnRetake.addEventListener("click", async () => {
   }
 });
 
-els.btnPrint.addEventListener("click", printLikeDownload);
+els.btnPrint.addEventListener("click", downloadWithAnimation);
 
 els.btnCopyHashtag?.addEventListener("click", async () => {
   try {
@@ -625,18 +620,16 @@ els.btnCopyHashtag?.addEventListener("click", async () => {
     const prev = els.btnCopyHashtag.textContent;
     els.btnCopyHashtag.textContent = "Copied";
     setTimeout(() => (els.btnCopyHashtag.textContent = prev), 900);
-  } catch {
-    // fine to silently fail
-  }
+  } catch {}
 });
 
 window.addEventListener("resize", () => setStageHeight());
 
 /* =========
-   Init (gate only)
+   Init
    ========= */
 document.body.classList.remove("booth-on");
 document.body.classList.remove("show-strip");
-els.booth.setAttribute("aria-hidden", "true");
+els.booth?.setAttribute("aria-hidden", "true");
 hideToast();
 setGateNote("");
