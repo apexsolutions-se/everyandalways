@@ -215,7 +215,7 @@ video{
   height:100%;
   object-fit: cover;
   transform: scaleX(-1);
-  filter: grayscale(1) contrast(1.15) brightness(1.05);
+  filter: none;
 }
 
 .flash{
@@ -269,7 +269,7 @@ video{
   height:100%;
   object-fit: cover;
   display:none;
-  filter: grayscale(1) contrast(1.12) brightness(1.05);
+  filter: none;
 }
 .shot.filled img{ display:block; }
 
