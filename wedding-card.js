@@ -2,7 +2,6 @@
 /* Ever & Always — Wedding Card Photo Booth
    - Gate landing → booth
    - 3 photos with countdown
-   - GUARANTEED black & white (pixel-level grayscale)
    - Output: 2x2 wedding card
        Row 1: Photo 1 | Photo 2
        Row 2: Photo 3 | TEXT PNG (transparent)
@@ -41,7 +40,7 @@ const els = {
   cameraPanel: document.getElementById("cameraPanel"),
   stripPanel: document.getElementById("stripPanel"),
 
-  // ✅ overlay image
+  // overlay image
   holdToSave: document.getElementById("holdToSave"),
 };
 
@@ -166,7 +165,9 @@ function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = async () => {
-      try { if (img.decode) await img.decode(); } catch {}
+      try {
+        if (img.decode) await img.decode();
+      } catch {}
       resolve(img);
     };
     img.onerror = reject;
@@ -191,7 +192,7 @@ function ensureTextOverlay() {
 }
 
 /* =========
-   ✅ Hold-to-save overlay sync (ONLY after card draw)
+   Hold-to-save overlay sync
    ========= */
 function syncHoldToSaveOverlay() {
   if (!els.holdToSave || !els.stripCanvas) return;
@@ -213,7 +214,11 @@ async function initCamera() {
     setStatus("Requesting camera access…");
 
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
       audio: false,
     });
 
@@ -259,19 +264,8 @@ function flash() {
 }
 
 /* =========
-   GUARANTEED GRAYSCALE
+   Capture frame in COLOR
    ========= */
-function toGrayscaleInPlace(imageData) {
-  const d = imageData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i], g = d[i + 1], b = d[i + 2];
-    const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
-    d[i] = d[i + 1] = d[i + 2] = y;
-  }
-  return imageData;
-}
-
-/* Capture -> BW JPEG dataURL */
 function captureFrame() {
   const c = els.captureCanvas;
   const ctx = c.getContext("2d", { willReadFrequently: true });
@@ -287,13 +281,13 @@ function captureFrame() {
   ctx.drawImage(els.video, 0, 0, vw, vh);
   ctx.restore();
 
-  const imgData = ctx.getImageData(0, 0, vw, vh);
-  toGrayscaleInPlace(imgData);
-  ctx.putImageData(imgData, 0, 0);
-
   const g = ctx.createRadialGradient(
-    vw / 2, vh / 2, Math.min(vw, vh) * 0.18,
-    vw / 2, vh / 2, Math.max(vw, vh) * 0.68
+    vw / 2,
+    vh / 2,
+    Math.min(vw, vh) * 0.18,
+    vw / 2,
+    vh / 2,
+    Math.max(vw, vh) * 0.68
   );
   g.addColorStop(0, "rgba(0,0,0,0)");
   g.addColorStop(1, "rgba(0,0,0,0.28)");
@@ -352,7 +346,7 @@ function containRect(srcW, srcH, dstW, dstH) {
     dx = 0;
     dy = Math.round((dstH - dh) / 2);
   } else {
-    dh = dstW ? dstH : dstH;
+    dh = dstH;
     dw = Math.round(dstH * srcRatio);
     dy = 0;
     dx = Math.round((dstW - dw) / 2);
@@ -360,23 +354,11 @@ function containRect(srcW, srcH, dstW, dstH) {
   return { dx, dy, dw, dh };
 }
 
-async function drawPhotoFillBW(ctx, imgObj, x, y, w, h) {
+async function drawPhotoFill(ctx, imgObj, x, y, w, h) {
   if (!imgObj) return;
 
   const { sx, sy, sw, sh } = coverRect(imgObj.width, imgObj.height, w, h);
-
-  const tmp = document.createElement("canvas");
-  tmp.width = w;
-  tmp.height = h;
-  const tctx = tmp.getContext("2d", { willReadFrequently: true });
-
-  tctx.drawImage(imgObj, sx, sy, sw, sh, 0, 0, w, h);
-
-  const imgData = tctx.getImageData(0, 0, w, h);
-  toGrayscaleInPlace(imgData);
-  tctx.putImageData(imgData, 0, 0);
-
-  ctx.drawImage(tmp, x, y);
+  ctx.drawImage(imgObj, sx, sy, sw, sh, x, y, w, h);
 }
 
 function drawTextOverlay(ctx, x, y, w, h) {
@@ -396,10 +378,20 @@ function drawTextOverlay(ctx, x, y, w, h) {
   const th = h - inset * 2;
 
   if (TEXT_PNG_FIT === "cover") {
-    const { sx, sy, sw, sh } = coverRect(textOverlayImg.width, textOverlayImg.height, tw, th);
+    const { sx, sy, sw, sh } = coverRect(
+      textOverlayImg.width,
+      textOverlayImg.height,
+      tw,
+      th
+    );
     ctx.drawImage(textOverlayImg, sx, sy, sw, sh, tx, ty, tw, th);
   } else {
-    const { dx, dy, dw, dh } = containRect(textOverlayImg.width, textOverlayImg.height, tw, th);
+    const { dx, dy, dw, dh } = containRect(
+      textOverlayImg.width,
+      textOverlayImg.height,
+      tw,
+      th
+    );
     ctx.drawImage(textOverlayImg, tx + dx, ty + dy, dw, dh);
   }
 
@@ -434,13 +426,12 @@ async function buildCard() {
   const y1 = pad;
   const y2 = pad + cellH + gap;
 
-  await drawPhotoFillBW(ctx, shotImgs[0], x1, y1, cellW, cellH);
-  await drawPhotoFillBW(ctx, shotImgs[1], x2, y1, cellW, cellH);
-  await drawPhotoFillBW(ctx, shotImgs[2], x1, y2, cellW, cellH);
+  await drawPhotoFill(ctx, shotImgs[0], x1, y1, cellW, cellH);
+  await drawPhotoFill(ctx, shotImgs[1], x2, y1, cellW, cellH);
+  await drawPhotoFill(ctx, shotImgs[2], x1, y2, cellW, cellH);
 
   drawTextOverlay(ctx, x2, y2, cellW, cellH);
 
-  // ✅ sync overlay after the draw is actually on the canvas
   requestAnimationFrame(syncHoldToSaveOverlay);
 }
 
@@ -519,7 +510,8 @@ function downloadBlob(blob, filename) {
   a.style.display = "none";
   document.body.appendChild(a);
 
-  const sx = window.scrollX, sy = window.scrollY;
+  const sx = window.scrollX,
+    sy = window.scrollY;
   a.click();
   window.scrollTo(sx, sy);
 
